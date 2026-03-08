@@ -16,6 +16,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import cross_val_score
 from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
 from collections import Counter
 
 
@@ -79,35 +80,46 @@ X = scaler.fit_transform(X)
 # ====================================================
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
 
-# ====================================================
-# 10. Class Balancing with SMOTE
-# ====================================================
-print("\n► Class Distribution Before SMOTE:", Counter(y_train))
-smote = SMOTE()
-X_train, y_train = smote.fit_resample(X_train, y_train)
+print("\n► Class Distribution (Train Set):", Counter(y_train))
 
-print("► Class Distribution After SMOTE:", Counter(y_train))
 
 # ====================================================
-# 10.1. Cross-Validation for Model Performance
+# 10. Cross-Validation with SMOTE Pipeline
 # ====================================================
-logit_cv = LogisticRegression(max_iter=1000)
-cv_scores = cross_val_score(logit_cv, X_train, y_train, cv=5, scoring="accuracy")
+# SMOTE is applied inside the pipeline to prevent data leakage:
+# synthetic samples are generated only on each fold's training portion,
+# never on the validation fold.
+cv_pipeline = Pipeline([
+    ("smote", SMOTE()),
+    ("model", LogisticRegression(max_iter=1000))
+])
 
-print("\n► Cross-Validation Results (5-Fold):")
+cv_scores = cross_val_score(cv_pipeline, X_train, y_train, cv=5, scoring="accuracy")
+
+print("\n► Cross-Validation Results (5-Fold, SMOTE inside pipeline):")
 print(f"Accuracy Scores: {cv_scores}")
 print(f"Mean Accuracy: {cv_scores.mean():.4f}")
 print(f"Standard Deviation: {cv_scores.std():.4f}")
 
+
 # ====================================================
-# 11. Building the Logistic Regression Model
+# 11. Class Balancing with SMOTE (for final model training)
+# ====================================================
+smote = SMOTE()
+X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
+
+print("\n► Class Distribution After SMOTE:", Counter(y_train_res))
+
+
+# ====================================================
+# 12. Building the Logistic Regression Model
 # ====================================================
 logit = LogisticRegression(max_iter=1000)
-logit.fit(X_train, y_train)
+logit.fit(X_train_res, y_train_res)
 
 
 # ====================================================
-# 12. Displaying Model Coefficients
+# 13. Displaying Model Coefficients
 # ====================================================
 feature_names = df.drop("diagnosis", axis=1).columns
 beta = pd.Series(logit.coef_[0], index=feature_names)
@@ -115,16 +127,16 @@ print("\n► Coefficients (β):\n", beta)
 
 
 # ====================================================
-# 13. Odds Ratios (Exp(β)) Calculation
+# 14. Odds Ratios (Exp(β)) Calculation
 # ====================================================
 odds_ratios = np.exp(beta)
 print("\n► Odds Ratios:\n", odds_ratios)
 
 
 # ====================================================
-# 14. Marginal Effects (MEM) | Average Marginal Effect
+# 15. Marginal Effects (MEM) | Average Marginal Effect
 # ====================================================
-p_mean = logit.predict_proba(X_train)[:, 1].mean()
+p_mean = logit.predict_proba(X_train_res)[:, 1].mean()
 mem = p_mean * (1 - p_mean) * beta
 
 mem_df = pd.DataFrame({
@@ -137,7 +149,7 @@ print("\n► Marginal Effects at Mean (MEM):\n", mem_df)
 
 
 # ====================================================
-# 15. Model Performance Metrics
+# 16. Model Performance Metrics
 # ====================================================
 y_pred = logit.predict(X_test)
 
@@ -146,12 +158,12 @@ print("\n► Accuracy:", accuracy_score(y_test, y_pred))
 print("► Precision:", precision_score(y_test, y_pred))
 print("► Recall:", recall_score(y_test, y_pred))
 print("► F1-Score:", f1_score(y_test, y_pred))
-roc_auc = roc_auc_score(y_test, logit.predict_proba(X_test)[:,1])
+roc_auc = roc_auc_score(y_test, logit.predict_proba(X_test)[:, 1])
 print("► ROC-AUC:", roc_auc)
 
 
 # ====================================================
-# 16. Confusion Matrix Visualization
+# 17. Confusion Matrix Visualization
 # ====================================================
 ConfusionMatrixDisplay.from_estimator(logit, X_test, y_test, cmap="Blues_r")
 plt.title("Confusion Matrix")
@@ -159,7 +171,7 @@ plt.show()
 
 
 # ====================================================
-# 17. Precision-Recall Curve
+# 18. Precision-Recall Curve
 # ====================================================
 PrecisionRecallDisplay.from_estimator(logit, X_test, y_test)
 plt.title("Precision-Recall Curve")
@@ -167,9 +179,9 @@ plt.show()
 
 
 # ====================================================
-# 18. ROC Curve
+# 19. ROC Curve
 # ====================================================
-fpr, tpr, thresholds = roc_curve(y_test, logit.predict_proba(X_test)[:,1])
+fpr, tpr, thresholds = roc_curve(y_test, logit.predict_proba(X_test)[:, 1])
 plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
 plt.plot([0, 1], [0, 1], 'k--')
 plt.xlabel("False Positive Rate")
@@ -178,21 +190,22 @@ plt.title("ROC Curve")
 plt.legend()
 plt.show()
 
+
 # ====================================================
-# 19. Overfitting Check – Train vs Test Metrics
+# 20. Overfitting Check – Train vs Test Metrics
 # ====================================================
-y_train_pred = logit.predict(X_train)
+y_train_pred = logit.predict(X_train_res)
 y_test_pred = logit.predict(X_test)
 
-train_acc = accuracy_score(y_train, y_train_pred)
-train_prec = precision_score(y_train, y_train_pred)
-train_recall = recall_score(y_train, y_train_pred)
-train_f1 = f1_score(y_train, y_train_pred)
-train_auc = roc_auc_score(y_train, logit.predict_proba(X_train)[:,1])
+train_acc = accuracy_score(y_train_res, y_train_pred)
+train_prec = precision_score(y_train_res, y_train_pred)
+train_recall = recall_score(y_train_res, y_train_pred)
+train_f1 = f1_score(y_train_res, y_train_pred)
+train_auc = roc_auc_score(y_train_res, logit.predict_proba(X_train_res)[:, 1])
 
 print("\n► Train vs Test Metrics Comparison")
-print(f"Accuracy: Train={train_acc:.4f} | Test={accuracy_score(y_test, y_test_pred):.4f}")
+print(f"Accuracy:  Train={train_acc:.4f} | Test={accuracy_score(y_test, y_test_pred):.4f}")
 print(f"Precision: Train={train_prec:.4f} | Test={precision_score(y_test, y_test_pred):.4f}")
-print(f"Recall: Train={train_recall:.4f} | Test={recall_score(y_test, y_test_pred):.4f}")
-print(f"F1-Score: Train={train_f1:.4f} | Test={f1_score(y_test, y_test_pred):.4f}")
-print(f"ROC-AUC: Train={train_auc:.4f} | Test={roc_auc:.4f}")
+print(f"Recall:    Train={train_recall:.4f} | Test={recall_score(y_test, y_test_pred):.4f}")
+print(f"F1-Score:  Train={train_f1:.4f} | Test={f1_score(y_test, y_test_pred):.4f}")
+print(f"ROC-AUC:   Train={train_auc:.4f} | Test={roc_auc:.4f}")
