@@ -17,7 +17,7 @@ Binary classification of **malignant vs. benign breast tumors** using Logistic R
 | **Target** | `diagnosis` — Malignant (1) / Benign (0) |
 | **Algorithm** | Logistic Regression |
 | **Class Balancing** | SMOTE (Synthetic Minority Oversampling Technique) |
-| **Validation** | 5-Fold Cross-Validation |
+| **Validation** | 5-Fold Cross-Validation (SMOTE inside pipeline) |
 | **Interpretability** | Coefficients (β), Odds Ratios, Marginal Effects (MEM) |
 | **Evaluation** | Accuracy, Precision, Recall, F1-Score, ROC-AUC |
 
@@ -42,8 +42,8 @@ breast-cancer-logistic-regression/
 2. **EDA** — Descriptive statistics, missing value check, target distribution
 3. **Feature Engineering** — StandardScaler normalization `(x − μ) / σ`
 4. **Train/Test Split** — 80/20 split with `random_state=42`
-5. **Class Balancing** — SMOTE applied on training set only (no data leakage)
-6. **Cross-Validation** — 5-Fold CV on SMOTE-resampled training set
+5. **Cross-Validation** — 5-Fold CV via `imblearn.pipeline` (SMOTE applied per fold, no data leakage)
+6. **Class Balancing** — SMOTE applied on full training set for final model training
 7. **Model Training** — Logistic Regression (`max_iter=1000`)
 8. **Interpretability** — Coefficients (β), Odds Ratios `exp(β)`, Marginal Effects at Mean (MEM)
 9. **Evaluation** — Confusion Matrix, Precision-Recall Curve, ROC Curve
@@ -61,7 +61,7 @@ breast-cancer-logistic-regression/
 | **Mean CV Accuracy** | ~0.98+ |
 | **Standard Deviation** | Low variance — stable model |
 
-> Cross-validation is applied **after SMOTE** on the training set, ensuring balanced class distribution across all folds while preventing data leakage from the test set.
+> SMOTE is wrapped inside an `imblearn.Pipeline` so that synthetic samples are generated **only on each fold's training portion**. The validation fold always contains real observations only, preventing data leakage.
 
 ### Test Set Performance
 
@@ -136,7 +136,7 @@ Beyond standard metrics, this project goes deeper into understanding **why** the
 ## 💡 Key Findings
 
 - The model correctly classifies **98.25%** of all samples with only **2 misclassifications** out of 114 test observations.
-- **5-Fold Cross-Validation** confirms stable generalization — low variance across folds with no sign of instability.
+- **5-Fold Cross-Validation** (via `imblearn.Pipeline`) confirms stable generalization — SMOTE is applied per fold to prevent data leakage, ensuring unbiased CV scores.
 - `texture_worst`, `radius_se`, and `symmetry_worst` are the strongest predictors of malignancy.
 - `compactness_mean` and `compactness_se` show **negative** marginal effects — higher compactness slightly reduces predicted malignancy probability in this model.
 - **No overfitting** observed: train and test metrics differ by less than 1% across all metrics.
