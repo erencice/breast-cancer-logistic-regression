@@ -14,7 +14,7 @@ from sklearn.metrics import (
     recall_score, f1_score, roc_auc_score, roc_curve,
     ConfusionMatrixDisplay, PrecisionRecallDisplay
 )
-
+from sklearn.model_selection import cross_val_score
 from imblearn.over_sampling import SMOTE
 from collections import Counter
 
@@ -88,6 +88,16 @@ X_train, y_train = smote.fit_resample(X_train, y_train)
 
 print("► Class Distribution After SMOTE:", Counter(y_train))
 
+# ====================================================
+# 10.1. Cross-Validation for Model Performance
+# ====================================================
+logit_cv = LogisticRegression(max_iter=1000)
+cv_scores = cross_val_score(logit_cv, X_train, y_train, cv=5, scoring="accuracy")
+
+print("\n► Cross-Validation Results (5-Fold):")
+print(f"Accuracy Scores: {cv_scores}")
+print(f"Mean Accuracy: {cv_scores.mean():.4f}")
+print(f"Standard Deviation: {cv_scores.std():.4f}")
 
 # ====================================================
 # 11. Building the Logistic Regression Model
